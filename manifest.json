@@ -1,6 +1,6 @@
 {
-    "version": "",
-    "thumbnail": "",
-    "id": "",
-    "name": ""
+    "version": "1.0.0",
+    "thumbnail": "assets/start.png",
+    "id": "com_thiritin_kimai_plugin",
+    "name": "Kimai Time Tracking"
 }
