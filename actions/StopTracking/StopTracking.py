@@ -9,6 +9,7 @@ import os
 import requests
 import threading
 from typing import Dict, Any, Optional
+from loguru import logger as log
 
 # Import gtk modules - used for the config rows
 import gi
@@ -61,19 +62,35 @@ class StopTracking(ActionBase):
             # Stop the active timesheet
             url = f"{kimai_url.rstrip('/')}/api/timesheets/{active_id}/stop"
             headers = {
-                "X-AUTH-TOKEN": api_token,
+                "Authorization": f"Bearer {api_token}",
                 "Content-Type": "application/json"
             }
             
             response = requests.patch(url, headers=headers, timeout=10)
             
             if response.status_code in [200, 201]:
+                log.info(f"Successfully stopped time tracking for timesheet ID {active_id}")
                 self.show_success()
             else:
+                log.error(f"Failed to stop time tracking. Status: {response.status_code}")
+                log.error(f"Response body: {response.text}")
+                log.error(f"Request URL: {url}")
+                log.error(f"Timesheet ID: {active_id}")
                 self.show_error()
                 
+        except requests.exceptions.Timeout:
+            log.error(f"Timeout while stopping time tracking. URL: {kimai_url}")
+            self.show_error()
+        except requests.exceptions.ConnectionError:
+            log.error(f"Connection error while stopping time tracking. URL: {kimai_url}")
+            self.show_error()
+        except requests.exceptions.RequestException as e:
+            log.error(f"HTTP request error while stopping time tracking: {e}")
+            log.error(f"URL: {kimai_url}")
+            self.show_error()
         except Exception as e:
-            print(f"Error stopping time tracking: {e}")
+            log.error(f"Unexpected error stopping time tracking: {e}")
+            log.error(f"URL: {kimai_url}")
             self.show_error()
     
     def _get_active_timesheet_id(self, kimai_url: str, api_token: str) -> Optional[int]:
@@ -81,7 +98,7 @@ class StopTracking(ActionBase):
         try:
             url = f"{kimai_url.rstrip('/')}/api/timesheets"
             headers = {
-                "X-AUTH-TOKEN": api_token,
+                "Authorization": f"Bearer {api_token}",
                 "Content-Type": "application/json"
             }
             
@@ -92,12 +109,31 @@ class StopTracking(ActionBase):
             if response.status_code == 200:
                 data = response.json()
                 if data and len(data) > 0:
-                    return data[0].get("id")
+                    active_id = data[0].get("id")
+                    log.info(f"Found active timesheet with ID: {active_id}")
+                    return active_id
+                else:
+                    log.warning("No active timesheet found")
+                    return None
+            else:
+                log.error(f"Failed to get active timesheet. Status: {response.status_code}")
+                log.error(f"Response body: {response.text}")
+                log.error(f"Request URL: {url}")
+                return None
             
+        except requests.exceptions.Timeout:
+            log.error(f"Timeout while getting active timesheet. URL: {kimai_url}")
             return None
-            
+        except requests.exceptions.ConnectionError:
+            log.error(f"Connection error while getting active timesheet. URL: {kimai_url}")
+            return None
+        except requests.exceptions.RequestException as e:
+            log.error(f"HTTP request error while getting active timesheet: {e}")
+            log.error(f"URL: {kimai_url}")
+            return None
         except Exception as e:
-            print(f"Error getting active timesheet: {e}")
+            log.error(f"Unexpected error getting active timesheet: {e}")
+            log.error(f"URL: {kimai_url}")
             return None
     
     def show_success(self) -> None:
