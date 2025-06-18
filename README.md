@@ -10,7 +10,8 @@ A StreamController plugin for integrating with Kimai time tracking system.
   - Only displays running state on the button matching the active project/activity
 - **Active Tracking Display**: Dedicated display button showing current tracking status
   - Shows customer/project/activity information
-  - Displays elapsed time with auto-refresh every 30 seconds
+  - Displays elapsed time with immediate updates when tracking starts/stops
+  - Auto-refreshes every 30 seconds and updates instantly on tracking changes
   - Visual status indicators for different states
 - **Multi-Instance Coordination**: Multiple buttons work together seamlessly
   - Starting any button automatically stops the currently active timesheet
@@ -87,6 +88,7 @@ A dedicated display button that shows information about the currently active tim
 
 **Behavior:**
 - **Auto-Update**: Refreshes every 30 seconds automatically
+- **Immediate Updates**: Updates instantly when time tracking starts or stops from any StartTracking button
 - **Manual Refresh**: Press the button to refresh immediately
 - **Visual States**:
   - **Active Tracking**: Shows customer/project/activity info with subtle green background

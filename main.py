@@ -114,6 +114,16 @@ class PluginTemplate(PluginBase):
                     from loguru import logger as log
                     log.error(f"Error notifying action instance: {e}")
     
+    def notify_timesheet_started(self):
+        """Notify all action instances that a timesheet has been started"""
+        for instance in self.action_instances:
+            if hasattr(instance, 'on_timesheet_started_notification'):
+                try:
+                    instance.on_timesheet_started_notification()
+                except Exception as e:
+                    from loguru import logger as log
+                    log.error(f"Error notifying action instance: {e}")
+    
     def get_settings_area(self):
         """Return the settings area for the plugin"""
         return self.settings_manager.get_settings_area()

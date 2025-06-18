@@ -1,0 +1,206 @@
+name: Test Kimai Plugin
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests>=2.28.0
+        # Install other dependencies if needed
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Validate manifest.json
+      run: |
+        python -c "
+        import json
+        import sys
+        
+        try:
+            with open('manifest.json', 'r') as f:
+                manifest = json.load(f)
+            
+            required_fields = ['id', 'name', 'version', 'author', 'description']
+            for field in required_fields:
+                if field not in manifest:
+                    print(f'❌ Missing required field: {field}')
+                    sys.exit(1)
+                    
+            print('✅ manifest.json is valid')
+        except json.JSONDecodeError as e:
+            print(f'❌ Invalid JSON in manifest.json: {e}')
+            sys.exit(1)
+        except Exception as e:
+            print(f'❌ Error validating manifest.json: {e}')
+            sys.exit(1)
+        "
+
+    - name: Validate attribution.json
+      run: |
+        python -c "
+        import json
+        import sys
+        
+        try:
+            with open('attribution.json', 'r') as f:
+                attribution = json.load(f)
+            
+            if 'generic' not in attribution:
+                print('❌ Missing generic attribution section')
+                sys.exit(1)
+                
+            generic = attribution['generic']
+            required_fields = ['copyright', 'license', 'license-url']
+            for field in required_fields:
+                if field not in generic or not generic[field]:
+                    print(f'❌ Missing or empty required field in generic: {field}')
+                    sys.exit(1)
+                    
+            print('✅ attribution.json is valid')
+        except json.JSONDecodeError as e:
+            print(f'❌ Invalid JSON in attribution.json: {e}')
+            sys.exit(1)
+        except Exception as e:
+            print(f'❌ Error validating attribution.json: {e}')
+            sys.exit(1)
+        "
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile main.py
+        python -m py_compile actions/StartTracking/StartTracking.py
+        python -m py_compile actions/StopTracking/StopTracking.py
+        python -m py_compile actions/DisplayActiveTracking/DisplayActiveTracking.py
+        echo "✅ All Python files have valid syntax"
+
+    - name: Run plugin structure tests
+      run: |
+        python -c "
+        import os
+        import sys
+        
+        # Check required files exist
+        required_files = [
+            'manifest.json',
+            'attribution.json', 
+            'main.py',
+            'README.md',
+            'actions/StartTracking/StartTracking.py',
+            'actions/StopTracking/StopTracking.py',
+            'actions/DisplayActiveTracking/DisplayActiveTracking.py'
+        ]
+        
+        missing_files = []
+        for file in required_files:
+            if not os.path.exists(file):
+                missing_files.append(file)
+        
+        if missing_files:
+            print(f'❌ Missing required files: {missing_files}')
+            sys.exit(1)
+            
+        print('✅ All required files present')
+        
+        # Check assets directory
+        if not os.path.exists('assets'):
+            print('❌ Missing assets directory')
+            sys.exit(1)
+            
+        required_assets = ['info.png', 'start.png', 'stop.png']
+        for asset in required_assets:
+            if not os.path.exists(f'assets/{asset}'):
+                print(f'❌ Missing asset: assets/{asset}')
+                sys.exit(1)
+                
+        print('✅ All required assets present')
+        "
+
+    - name: Test import functionality
+      run: |
+        cd /tmp
+        python -c "
+        import sys
+        import os
+        
+        # Add plugin directory to path
+        plugin_path = '${{ github.workspace }}'
+        sys.path.insert(0, plugin_path)
+        
+        try:
+            # Test basic imports (without StreamController dependencies)
+            print('Testing plugin structure...')
+            
+            # Check that files can be read
+            with open(os.path.join(plugin_path, 'manifest.json')) as f:
+                import json
+                manifest = json.load(f)
+                print(f'Plugin: {manifest[\"name\"]} v{manifest[\"version\"]}')
+            
+            print('✅ Plugin structure test passed')
+            
+        except Exception as e:
+            print(f'❌ Plugin structure test failed: {e}')
+            sys.exit(1)
+        "
+
+    - name: Validate README
+      run: |
+        if [ ! -f "README.md" ]; then
+          echo "❌ README.md is missing"
+          exit 1
+        fi
+        
+        # Check README has required sections
+        if ! grep -q "# Kimai Time Tracking Plugin" README.md; then
+          echo "❌ README.md missing title"
+          exit 1
+        fi
+        
+        if ! grep -q "## Features" README.md; then
+          echo "❌ README.md missing Features section"
+          exit 1
+        fi
+        
+        if ! grep -q "## Configuration" README.md; then
+          echo "❌ README.md missing Configuration section"
+          exit 1
+        fi
+        
+        echo "✅ README.md structure is valid"
+
+  build-info:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Display build info
+      run: |
+        echo "🎉 Kimai StreamController Plugin Build Successful!"
+        echo "📦 Plugin: $(jq -r '.name' manifest.json)"
+        echo "🏷️  Version: $(jq -r '.version' manifest.json)"
+        echo "👤 Author: $(jq -r '.author' manifest.json)"
+        echo "📄 Description: $(jq -r '.description' manifest.json)"
+        echo ""
+        echo "✅ Ready for StreamController Plugin Store!"

@@ -176,6 +176,12 @@ class StartTracking(ActionBase):
                 # Update UI in main thread to show running state
                 from gi.repository import GLib
                 GLib.idle_add(self._set_running_state, timesheet_id, data["begin"])
+                
+                # Notify other instances that timesheet has been started
+                try:
+                    self.plugin_base.notify_timesheet_started()
+                except Exception as e:
+                    log.error(f"Error notifying timesheet started: {e}")
             else:
                 log.error(f"Failed to start time tracking. Status: {response.status_code}")
                 log.error(f"Response body: {response.text}")
@@ -352,6 +358,18 @@ class StartTracking(ActionBase):
                     # Update UI in main thread
                     from gi.repository import GLib
                     GLib.idle_add(self._set_running_state, active_timesheet['id'], active_timesheet.get('begin'))
+                else:
+                    log.info("Active timesheet found but doesn't match this button's configuration")
+                    # Update UI to stopped state if we're currently showing as running
+                    if self.is_running:
+                        from gi.repository import GLib
+                        GLib.idle_add(self._set_stopped_state)
+            else:
+                log.info("No active timesheet found")
+                # Update UI to stopped state if we're currently showing as running
+                if self.is_running:
+                    from gi.repository import GLib
+                    GLib.idle_add(self._set_stopped_state)
                     
         except Exception as e:
             log.error(f"Error in background timesheet check: {e}")
@@ -1025,6 +1043,9 @@ class StartTracking(ActionBase):
                 # Update UI in main thread to show stopped state
                 from gi.repository import GLib
                 GLib.idle_add(self._set_stopped_state)
+                
+                # Notify other instances that timesheet has been stopped
+                self._notify_other_instances_stopped()
             else:
                 log.error(f"Failed to stop time tracking. Status: {response.status_code}")
                 log.error(f"Response body: {response.text}")

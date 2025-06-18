@@ -30,6 +30,9 @@ class DisplayActiveTracking(ActionBase):
         # Set the default icon for display tracking
         self.set_media(media_path=self.plugin_base.get_asset_path("info.png"), size=0.75)
         
+        # Register this instance for notifications
+        self.plugin_base.register_action_instance(self)
+        
         # Start periodic updates
         self.start_periodic_updates()
         
@@ -283,7 +286,44 @@ class DisplayActiveTracking(ActionBase):
             log.error("Display updated: Error state")
         except Exception as e:
             log.error(f"Error showing error state: {e}")
-    
+
+    def on_timesheet_started_notification(self) -> None:
+        """Handle notification that a timesheet has been started"""
+        try:
+            log.info("Received notification that a timesheet was started - updating display")
+            # Immediately update display
+            self.update_display()
+        except Exception as e:
+            log.error(f"Error handling timesheet started notification: {e}")
+
+    def on_timesheet_stopped_notification(self) -> None:
+        """Handle notification that a timesheet has been stopped"""
+        try:
+            log.info("Received notification that a timesheet was stopped - updating display")
+            # Immediately update display
+            self.update_display()
+        except Exception as e:
+            log.error(f"Error handling timesheet stopped notification: {e}")
+
+    def __del__(self):
+        """Cleanup when action is destroyed"""
+        try:
+            log.info("DisplayActiveTracking action being destroyed - performing cleanup")
+            
+            # Stop periodic updates
+            self.stop_periodic_updates()
+            
+            # Unregister from notifications
+            if hasattr(self, 'plugin_base') and self.plugin_base is not None:
+                try:
+                    self.plugin_base.unregister_action_instance(self)
+                    log.info("Unregistered from plugin notifications")
+                except Exception as e:
+                    log.error(f"Error unregistering from notifications: {e}")
+                    
+        except Exception as e:
+            log.error(f"Error during DisplayActiveTracking cleanup: {e}")
+
     def get_config_rows(self) -> list:
         """Return configuration UI rows"""
         try:
