@@ -70,6 +70,10 @@ class StopTracking(ActionBase):
             
             if response.status_code in [200, 201]:
                 log.info(f"Successfully stopped time tracking for timesheet ID {active_id}")
+                
+                # Notify all StartTracking instances that timesheet was stopped
+                self.plugin_base.notify_timesheet_stopped()
+                
                 self.show_success()
             else:
                 log.error(f"Failed to stop time tracking. Status: {response.status_code}")

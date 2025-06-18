@@ -7,6 +7,7 @@ from src.backend.PluginManager.ActionInputSupport import ActionInputSupport
 # Import actions
 from .actions.StartTracking.StartTracking import StartTracking
 from .actions.StopTracking.StopTracking import StopTracking
+from .actions.DisplayActiveTracking.DisplayActiveTracking import DisplayActiveTracking
 
 # Import settings
 from .settings import KimaiPluginSettings
@@ -16,6 +17,7 @@ class PluginTemplate(PluginBase):
         """Add icons for the actions"""
         self.add_icon("start", self.get_asset_path("start.png"))
         self.add_icon("stop", self.get_asset_path("stop.png"))
+        self.add_icon("info", self.get_asset_path("info.png"))
 
     def _add_colors(self):
         """Add colors for visual feedback"""
@@ -53,6 +55,20 @@ class PluginTemplate(PluginBase):
         )
         self.add_action_holder(self.stop_tracking_holder)
 
+        # Display Active Tracking Action
+        self.display_active_tracking_holder = ActionHolder(
+            plugin_base=self,
+            action_base=DisplayActiveTracking,
+            action_id="com_thiritin_kimai_plugin::DisplayActiveTracking",
+            action_name="Display Active Tracking",
+            action_support={
+                Input.Key: ActionInputSupport.SUPPORTED,
+                Input.Dial: ActionInputSupport.UNTESTED,
+                Input.Touchscreen: ActionInputSupport.UNTESTED,
+            }
+        )
+        self.add_action_holder(self.display_active_tracking_holder)
+
     def __init__(self):
         super().__init__()
 
@@ -61,6 +77,9 @@ class PluginTemplate(PluginBase):
         
         # Initialize settings manager
         self.settings_manager = KimaiPluginSettings(self)
+        
+        # Simple notification system for inter-action communication
+        self.action_instances = []
 
         # Initialize components
         self._add_icons()
@@ -74,6 +93,26 @@ class PluginTemplate(PluginBase):
             plugin_version="1.0.0",
             app_version="1.0.0",
         )
+    
+    def register_action_instance(self, action_instance):
+        """Register an action instance for notifications"""
+        if action_instance not in self.action_instances:
+            self.action_instances.append(action_instance)
+    
+    def unregister_action_instance(self, action_instance):
+        """Unregister an action instance"""
+        if action_instance in self.action_instances:
+            self.action_instances.remove(action_instance)
+    
+    def notify_timesheet_stopped(self):
+        """Notify all StartTracking instances that a timesheet has been stopped"""
+        for instance in self.action_instances:
+            if hasattr(instance, 'on_timesheet_stopped_notification'):
+                try:
+                    instance.on_timesheet_stopped_notification()
+                except Exception as e:
+                    from loguru import logger as log
+                    log.error(f"Error notifying action instance: {e}")
     
     def get_settings_area(self):
         """Return the settings area for the plugin"""

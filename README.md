@@ -4,9 +4,20 @@ A StreamController plugin for integrating with Kimai time tracking system.
 
 ## Features
 
-- **Start Time Tracking**: Start tracking time for a specific project, activity, and customer
-- **Stop Time Tracking**: Stop the currently active time tracking session
+- **Smart Start/Stop Toggle**: Single button that starts and stops time tracking
+  - Shows pause icon with elapsed time when active
+  - Automatically stops other active time tracking when starting a new session
+  - Only displays running state on the button matching the active project/activity
+- **Active Tracking Display**: Dedicated display button showing current tracking status
+  - Shows customer/project/activity information
+  - Displays elapsed time with auto-refresh every 30 seconds
+  - Visual status indicators for different states
+- **Multi-Instance Coordination**: Multiple buttons work together seamlessly
+  - Starting any button automatically stops the currently active timesheet
+  - Visual feedback shows which project/activity is currently being tracked
 - **Global Settings**: Configure Kimai URL and API token once for all actions
+- **Smart Activity Selection**: Automatically selects the first available activity
+- **Hierarchical Filtering**: Customer filters projects, projects filter activities
 
 ## Configuration
 
@@ -22,10 +33,11 @@ First, configure the global settings for your Kimai instance:
 
 ### Action Configuration
 
-#### Start Time Tracking Action
+#### Start/Stop Time Tracking Action
 
-For each Start Time Tracking button, configure:
+Each Start Time Tracking button now functions as a **smart toggle button**:
 
+**Configuration:**
 - **Customer (Filter)**: Optional filter to show only projects for a specific customer
   - Select "All Customers" to see all projects
   - Select a specific customer to filter projects to only those belonging to that customer
@@ -33,24 +45,75 @@ For each Start Time Tracking button, configure:
 - **Activity**: Select from dropdown of available activities
   - When a project is selected: Shows activities specific to that project
   - When no project is selected: Shows global activities (those not tied to a specific project)
+  - **Auto-selection**: Automatically selects the first available activity if none is set
 - **Description**: Optional description for the time tracking entry
+
+**Behavior:**
+- **First Press**: Starts time tracking for the configured project/activity
+  - Automatically stops any other active time tracking
+  - Shows pause icon (⏸️) to indicate tracking is active
+  - Displays elapsed time (HH:MM format) in the top line
+- **Second Press**: Stops the active time tracking
+  - Returns to normal start icon
+  - Clears the elapsed time display
+
+**Multi-Button Coordination:**
+- Only the button matching the **currently active project/activity** shows the running state
+- Other buttons remain in "ready to start" state
+- Starting any button automatically stops the previous active timesheet
+- Perfect for switching between different projects/activities
 
 **Important**: Only the Project and Activity are sent to the Kimai API. The Customer field is used only for filtering the project list to make selection easier.
 
 Use the "Refresh Data" button to update all dropdown lists if new customers, projects, or activities are added to Kimai.
 
-#### Stop Time Tracking Action
+#### Stop Time Tracking Action (Legacy)
 
-The Stop Time Tracking action uses the global settings automatically - no additional configuration needed.
+The dedicated Stop Time Tracking action is still available for users who prefer separate start/stop buttons, but the new toggle functionality makes it largely unnecessary.
+
+#### Display Active Tracking Action
+
+A dedicated display button that shows information about the currently active time tracking session:
+
+**Configuration:**
+- No configuration required - automatically displays active tracking information
+- Uses the same global Kimai URL and API token settings
+
+**Display Information:**
+- **Top Line**: Customer & Project names (truncated to fit)
+- **Center Line**: Activity name
+- **Bottom Line**: Elapsed time in HH:MM format
+- **When Inactive**: All text is cleared (no display)
+
+**Behavior:**
+- **Auto-Update**: Refreshes every 30 seconds automatically
+- **Manual Refresh**: Press the button to refresh immediately
+- **Visual States**:
+  - **Active Tracking**: Shows customer/project/activity info with subtle green background
+  - **No Active Tracking**: Shows "No Active Tracking" message
+  - **Configuration Missing**: Shows "Config Missing" with yellow background
+  - **Error**: Shows "Error" with red background
+
+**Perfect for**: Having a dedicated "status display" button on your Stream Deck to see what you're currently tracking at a glance.
 
 ## Usage
 
 1. **Set up global settings**: Configure Kimai URL and API token in Plugin Settings
-2. **Configure Start buttons**: Select project and activity from dropdowns (and optional description) for each Start Time Tracking button
-3. **Add Stop button**: Place a Stop Time Tracking button on your deck
-4. **Use the buttons**: Press Start to begin tracking time, Stop to end the current session
+2. **Configure buttons**: For each Start Time Tracking button:
+   - Select customer (optional, for filtering)
+   - Select project from dropdown  
+   - Select activity from dropdown (auto-selected if only one available)
+   - Add optional description
+3. **Use the buttons**: 
+   - **First press**: Starts time tracking (shows pause icon with elapsed time in top line)
+   - **Second press**: Stops time tracking (returns to start icon)
+   - **Switch projects**: Press any other configured button to automatically stop current tracking and start the new one
 
-The buttons will show a green background on success and red background on error.
+**Visual Feedback:**
+- ⏸️ Pause icon indicates active time tracking
+- HH:MM elapsed time display in top line
+- Only the button with matching project/activity shows running state
+- Brief green/red backgrounds indicate success/error
 
 ## Finding Customers, Projects and Activities
 

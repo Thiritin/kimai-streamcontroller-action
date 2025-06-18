@@ -26,15 +26,34 @@ class StartTracking(ActionBase):
         self.projects_map = {}
         self.activities_map = {}
         
+        # State management for running status
+        self.is_running = False
+        self.current_timesheet_id = None
+        self.elapsed_timer_id = None
+        self.start_time = None
+        
     def on_ready(self) -> None:
-        # Set the icon for start tracking
+        # Set the default icon for start tracking
         self.set_media(media_path=self.plugin_base.get_asset_path("start.png"), size=0.75)
         
+        # Register this instance for notifications
+        self.plugin_base.register_action_instance(self)
+        
+        # Check if there's an active timesheet that matches this button's configuration
+        self.check_active_timesheet_status()
+        
     def on_key_down(self) -> None:
-        # Start time tracking when button is pressed
+        # Toggle functionality: start if not running, stop if running
         try:
-            log.info("StartTracking button pressed (on_key_down)")
-            self.start_time_tracking()
+            log.info("StartTracking button pressed (toggle mode)")
+            
+            if self.is_running:
+                log.info("Button is currently running - stopping time tracking")
+                self.stop_time_tracking()
+            else:
+                log.info("Button is not running - starting time tracking")
+                self.start_time_tracking()
+                
         except Exception as e:
             log.error(f"Error in on_key_down: {e}")
             import traceback
@@ -45,7 +64,7 @@ class StartTracking(ActionBase):
         pass
     
     def start_time_tracking(self) -> None:
-        """Start time tracking in Kimai"""
+        """Start time tracking in Kimai (with auto-stop of other instances)"""
         try:
             log.info("Start time tracking button pressed")
             
@@ -85,8 +104,9 @@ class StartTracking(ActionBase):
             
             log.info(f"Starting time tracking for project {project_id}, activity {activity_id}")
             
+            # First, stop any existing active timesheet
             # Run in separate thread to avoid blocking UI
-            threading.Thread(target=self._start_tracking_request, 
+            threading.Thread(target=self._start_tracking_with_auto_stop, 
                             args=(kimai_url, api_token, project_id, activity_id),
                             daemon=True).start()
                             
@@ -150,8 +170,12 @@ class StartTracking(ActionBase):
             if response.status_code in [200, 201]:
                 response_data = response.json()
                 log.info(f"Successfully started time tracking. Response: {response_data}")
-                log.info(f"Timesheet ID: {response_data.get('id', 'Unknown')}")
-                self.show_success()
+                timesheet_id = response_data.get('id')
+                log.info(f"Timesheet ID: {timesheet_id}")
+                
+                # Update UI in main thread to show running state
+                from gi.repository import GLib
+                GLib.idle_add(self._set_running_state, timesheet_id, data["begin"])
             else:
                 log.error(f"Failed to start time tracking. Status: {response.status_code}")
                 log.error(f"Response body: {response.text}")
@@ -171,43 +195,225 @@ class StartTracking(ActionBase):
         except requests.exceptions.Timeout:
             log.error(f"Timeout while starting time tracking. URL: {url}")
             log.error(f"Timeout occurred after 10 seconds")
-            self.show_error()
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
         except requests.exceptions.ConnectionError as e:
             log.error(f"Connection error while starting time tracking. URL: {url}")
             log.error(f"Connection error details: {e}")
-            self.show_error()
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
         except requests.exceptions.RequestException as e:
             log.error(f"HTTP request error while starting time tracking: {e}")
             log.error(f"URL: {url}")
             log.error(f"Request exception type: {type(e)}")
-            self.show_error()
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
         except ValueError as e:
             log.error(f"Invalid project_id or activity_id: {e}")
             log.error(f"project_id: '{project_id}' (type: {type(project_id)}), activity_id: '{activity_id}' (type: {type(activity_id)})")
-            self.show_error()
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
         except Exception as e:
             log.error(f"Unexpected error starting time tracking: {e}")
             log.error(f"Exception type: {type(e)}")
             log.error(f"URL: {url}")
             import traceback
             log.error(f"Traceback: {traceback.format_exc()}")
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
+    
+    def stop_time_tracking(self) -> None:
+        """Stop the currently running time tracking"""
+        try:
+            if not self.is_running or not self.current_timesheet_id:
+                log.warning("No active timesheet to stop")
+                return
+                
+            plugin_global_settings = self.plugin_base.get_settings()
+            kimai_url = plugin_global_settings.get("global_kimai_url", "")
+            api_token = plugin_global_settings.get("global_api_token", "")
+            
+            if not kimai_url or not api_token:
+                log.error("Missing Kimai URL or API token for stopping timesheet")
+                self.show_error()
+                return
+                
+            log.info(f"Stopping timesheet ID: {self.current_timesheet_id}")
+            
+            # Run in separate thread to avoid blocking UI
+            threading.Thread(target=self._stop_tracking_request, 
+                            args=(kimai_url, api_token, self.current_timesheet_id),
+                            daemon=True).start()
+                            
+        except Exception as e:
+            log.error(f"Unexpected error in stop_time_tracking: {e}")
+            import traceback
+            log.error(f"Traceback: {traceback.format_exc()}")
             self.show_error()
+
+    def _start_tracking_with_auto_stop(self, kimai_url: str, api_token: str, project_id: str, activity_id: str) -> None:
+        """Start tracking with automatic stopping of any existing active timesheet"""
+        try:
+            log.info("Starting time tracking with auto-stop of existing sessions")
+            
+            # First, check if there's an active timesheet and stop it
+            active_timesheet = self._get_active_timesheet(kimai_url, api_token)
+            if active_timesheet:
+                active_id = active_timesheet.get('id')
+                log.info(f"Found active timesheet ID {active_id}, stopping it first")
+                
+                # Stop the existing timesheet
+                stop_url = f"{kimai_url.rstrip('/')}/api/timesheets/{active_id}/stop"
+                headers = {
+                    "Authorization": f"Bearer {api_token}",
+                    "Content-Type": "application/json"
+                }
+                
+                stop_response = requests.patch(stop_url, headers=headers, timeout=10)
+                if stop_response.status_code in [200, 201]:
+                    log.info(f"Successfully stopped existing timesheet ID {active_id}")
+                    # Notify other instances that the timesheet has stopped
+                    self._notify_other_instances_stopped()
+                else:
+                    log.warning(f"Failed to stop existing timesheet ID {active_id}. Status: {stop_response.status_code}")
+                    log.warning(f"Response: {stop_response.text}")
+            
+            # Now start the new timesheet
+            self._start_tracking_request(kimai_url, api_token, project_id, activity_id)
+            
+        except Exception as e:
+            log.error(f"Error in _start_tracking_with_auto_stop: {e}")
+            import traceback
+            log.error(f"Traceback: {traceback.format_exc()}")
+            self.show_error()
+
+    def _get_active_timesheet(self, kimai_url: str, api_token: str) -> dict:
+        """Get the currently active timesheet with full expansion"""
+        try:
+            url = f"{kimai_url.rstrip('/')}/api/timesheets"
+            headers = {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Get active timesheets with full expansion (nested objects)
+            params = {"size": 1, "orderBy": "begin", "order": "DESC", "full": "true"}
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                timesheets = response.json()
+                if timesheets and len(timesheets) > 0:
+                    # Check if the first timesheet is active (no end time)
+                    timesheet = timesheets[0]
+                    if timesheet.get('end') is None:
+                        return timesheet
+            
+            return None
+            
+        except Exception as e:
+            log.error(f"Error getting active timesheet: {e}")
+            return None
+
+    def check_active_timesheet_status(self) -> None:
+        """Check if there's an active timesheet that matches this button's configuration"""
+        try:
+            plugin_global_settings = self.plugin_base.get_settings()
+            kimai_url = plugin_global_settings.get("global_kimai_url", "")
+            api_token = plugin_global_settings.get("global_api_token", "")
+            
+            if not kimai_url or not api_token:
+                return
+                
+            # Run in background thread
+            threading.Thread(target=self._check_active_timesheet_background, 
+                            args=(kimai_url, api_token), daemon=True).start()
+                            
+        except Exception as e:
+            log.error(f"Error checking active timesheet status: {e}")
+
+    def _check_active_timesheet_background(self, kimai_url: str, api_token: str) -> None:
+        """Background thread to check active timesheet status"""
+        try:
+            active_timesheet = self._get_active_timesheet(kimai_url, api_token)
+            if active_timesheet:
+                settings = self.get_settings()
+                my_project_id = settings.get("project_id", "")
+                my_activity_id = settings.get("activity_id", "")
+                
+                timesheet_project_id = str(active_timesheet.get('project', {}).get('id', ''))
+                timesheet_activity_id = str(active_timesheet.get('activity', {}).get('id', ''))
+                
+                # Check if the active timesheet matches this button's configuration
+                if (str(my_project_id) == timesheet_project_id and 
+                    str(my_activity_id) == timesheet_activity_id):
+                    
+                    log.info(f"Found matching active timesheet ID {active_timesheet['id']} for this button")
+                    
+                    # Update UI in main thread
+                    from gi.repository import GLib
+                    GLib.idle_add(self._set_running_state, active_timesheet['id'], active_timesheet.get('begin'))
+                    
+        except Exception as e:
+            log.error(f"Error in background timesheet check: {e}")
+
+    def _notify_other_instances_stopped(self) -> None:
+        """Notify other StartTracking instances that a timesheet has been stopped"""
+        try:
+            log.info("Notifying other instances that timesheet has been stopped")
+            self.plugin_base.notify_timesheet_stopped()
+        except Exception as e:
+            log.error(f"Error notifying other instances: {e}")
+    
+    def on_timesheet_stopped_notification(self) -> None:
+        """Handle notification that a timesheet has been stopped"""
+        try:
+            log.info("Received notification that a timesheet was stopped")
+            # Check if we should update our state
+            self.check_active_timesheet_status()
+        except Exception as e:
+            log.error(f"Error handling timesheet stopped notification: {e}")
     
     def show_success(self) -> None:
-        """Show success indicator"""
+        """Show success indicator (used for quick feedback)"""
         try:
-            log.info("Showing success indicator (green background)")
+            log.info("Showing success indicator (brief green background)")
             self.set_background_color([0, 255, 0, 100])  # Green background
+            
+            # Clear the success background after 2 seconds
+            from gi.repository import GLib
+            GLib.timeout_add_seconds(2, self._clear_success_background)
         except Exception as e:
             log.error(f"Error setting success background: {e}")
+    
+    def _clear_success_background(self) -> bool:
+        """Clear the success background"""
+        try:
+            if not self.is_running:  # Only clear if not in running state
+                self.set_background_color([0, 0, 0, 0])  # Transparent background
+        except Exception as e:
+            log.error(f"Error clearing success background: {e}")
+        return False  # Don't repeat the timer
         
     def show_error(self) -> None:
         """Show error indicator"""
         try:
             log.info("Showing error indicator (red background)")
             self.set_background_color([255, 0, 0, 100])  # Red background
+            
+            # Clear the error background after 3 seconds
+            from gi.repository import GLib
+            GLib.timeout_add_seconds(3, self._clear_error_background)
         except Exception as e:
             log.error(f"Error setting error background: {e}")
+    
+    def _clear_error_background(self) -> bool:
+        """Clear the error background"""
+        try:
+            if not self.is_running:  # Only clear if not in running state
+                self.set_background_color([0, 0, 0, 0])  # Transparent background
+        except Exception as e:
+            log.error(f"Error clearing error background: {e}")
+        return False  # Don't repeat the timer
         
     def get_config_rows(self) -> list:
         """Return configuration UI rows"""
@@ -798,3 +1004,197 @@ class StartTracking(ActionBase):
         
         # Reload all data
         self.load_customers_and_global_activities()
+    
+    def _stop_tracking_request(self, kimai_url: str, api_token: str, timesheet_id: int) -> None:
+        """Make the API request to stop tracking"""
+        try:
+            log.info(f"Stopping timesheet ID: {timesheet_id}")
+            
+            url = f"{kimai_url.rstrip('/')}/api/timesheets/{timesheet_id}/stop"
+            headers = {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.patch(url, headers=headers, timeout=10)
+            
+            if response.status_code in [200, 201]:
+                response_data = response.json()
+                log.info(f"Successfully stopped time tracking. Response: {response_data}")
+                
+                # Update UI in main thread to show stopped state
+                from gi.repository import GLib
+                GLib.idle_add(self._set_stopped_state)
+            else:
+                log.error(f"Failed to stop time tracking. Status: {response.status_code}")
+                log.error(f"Response body: {response.text}")
+                log.error(f"Request URL: {url}")
+                log.error(f"Timesheet ID: {timesheet_id}")
+                
+                # Update UI to show error
+                from gi.repository import GLib
+                GLib.idle_add(self.show_error)
+                
+        except requests.exceptions.Timeout:
+            log.error(f"Timeout while stopping time tracking. URL: {url}")
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
+        except requests.exceptions.ConnectionError as e:
+            log.error(f"Connection error while stopping time tracking: {e}")
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
+        except requests.exceptions.RequestException as e:
+            log.error(f"HTTP request error while stopping time tracking: {e}")
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
+        except Exception as e:
+            log.error(f"Unexpected error stopping time tracking: {e}")
+            import traceback
+            log.error(f"Traceback: {traceback.format_exc()}")
+            from gi.repository import GLib
+            GLib.idle_add(self.show_error)
+
+    def _set_running_state(self, timesheet_id: int, start_time: str) -> None:
+        """Set the button to running state with pause icon"""
+        try:
+            log.info(f"Setting running state - Timesheet ID: {timesheet_id}")
+            
+            self.is_running = True
+            self.current_timesheet_id = timesheet_id
+            self.start_time = start_time
+            
+            # Show pause icon to indicate running state
+            self.set_media(media_path=self.plugin_base.get_asset_path("stop.png"), size=0.75)
+            
+            # Start the elapsed time display
+            self._start_elapsed_time_display()
+            
+            # Clear any error background
+            self.set_background_color([0, 0, 0, 0])  # Transparent background
+            
+        except Exception as e:
+            log.error(f"Error setting running state: {e}")
+
+    def _set_stopped_state(self) -> None:
+        """Set the button to stopped state"""
+        try:
+            log.info("Setting stopped state")
+            
+            self.is_running = False
+            self.current_timesheet_id = None
+            self.start_time = None
+            
+            # Stop the elapsed time display
+            self._stop_elapsed_time_display()
+            
+            # Reset to original start icon
+            self.set_media(media_path=self.plugin_base.get_asset_path("start.png"), size=0.75)
+            
+            # Clear any background color
+            self.set_background_color([0, 0, 0, 0])  # Transparent background
+            
+        except Exception as e:
+            log.error(f"Error setting stopped state: {e}")
+
+    def _start_elapsed_time_display(self) -> None:
+        """Start the elapsed time display"""
+        try:
+            if self.elapsed_timer_id is not None:
+                # Stop existing timer
+                from gi.repository import GLib
+                GLib.source_remove(self.elapsed_timer_id)
+            
+            # Start new timer for elapsed time display (update every 1 second)
+            from gi.repository import GLib
+            self.elapsed_timer_id = GLib.timeout_add_seconds(1, self._update_elapsed_time_display)
+            
+            # Show initial elapsed time
+            self._update_elapsed_time_display()
+            
+        except Exception as e:
+            log.error(f"Error starting elapsed time display: {e}")
+
+    def _stop_elapsed_time_display(self) -> None:
+        """Stop the elapsed time display"""
+        try:
+            if self.elapsed_timer_id is not None:
+                from gi.repository import GLib
+                GLib.source_remove(self.elapsed_timer_id)
+                self.elapsed_timer_id = None
+                
+            # Clear the top label (where clock is displayed)
+            self.set_top_label("")
+                
+        except Exception as e:
+            log.error(f"Error stopping elapsed time display: {e}")
+
+    def _update_elapsed_time_display(self) -> bool:
+        """Update the elapsed time display - returns True to continue timer"""
+        try:
+            if not self.is_running:
+                return False  # Stop the timer
+            
+            # Calculate elapsed time if we have start time
+            elapsed_text = ""
+            if self.start_time:
+                try:
+                    from datetime import datetime
+                    
+                    # Handle timezone information in the datetime string
+                    start_time_clean = self.start_time
+                    if '+' in start_time_clean:
+                        # Positive timezone offset
+                        start_time_clean = start_time_clean.split('+')[0]
+                    elif start_time_clean.endswith('Z'):
+                        # UTC timezone indicator
+                        start_time_clean = start_time_clean[:-1]
+                    elif '-' in start_time_clean and start_time_clean.count('-') > 2:
+                        # Negative timezone offset (more than 2 dashes means timezone)
+                        start_time_clean = start_time_clean.rsplit('-', 1)[0]
+                    
+                    start_dt = datetime.strptime(start_time_clean, '%Y-%m-%dT%H:%M:%S')
+                    now_dt = datetime.now()
+                    elapsed = now_dt - start_dt
+                    
+                    hours = int(elapsed.total_seconds() // 3600)
+                    minutes = int((elapsed.total_seconds() % 3600) // 60)
+                    elapsed_text = f"{hours:02d}:{minutes:02d}"
+                except Exception as e:
+                    log.debug(f"Error calculating elapsed time: {e}")
+                    log.debug(f"Start time format: '{self.start_time}'")
+                    elapsed_text = "??:??"
+            
+            # Set the clock/elapsed time in the top label
+            self.set_top_label(elapsed_text)
+            
+            return True  # Continue the timer
+            
+        except Exception as e:
+            log.error(f"Error updating elapsed time display: {e}")
+            return False  # Stop the timer on error
+    
+    def __del__(self):
+        """Cleanup when action is destroyed"""
+        try:
+            log.info("StartTracking action being destroyed - performing cleanup")
+            
+            # Stop any running timer
+            if hasattr(self, 'elapsed_timer_id') and self.elapsed_timer_id is not None:
+                try:
+                    from gi.repository import GLib
+                    GLib.source_remove(self.elapsed_timer_id)
+                    self.elapsed_timer_id = None
+                    log.info("Cleaned up elapsed timer")
+                except Exception as e:
+                    log.error(f"Error cleaning up elapsed timer: {e}")
+            
+            # Unregister from notifications
+            if hasattr(self, 'plugin_base') and self.plugin_base is not None:
+                try:
+                    self.plugin_base.unregister_action_instance(self)
+                    log.info("Unregistered from plugin notifications")
+                except Exception as e:
+                    log.error(f"Error unregistering from notifications: {e}")
+                    
+        except Exception as e:
+            log.error(f"Error during StartTracking cleanup: {e}")
