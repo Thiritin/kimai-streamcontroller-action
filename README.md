@@ -5,7 +5,7 @@ A StreamController plugin for integrating with Kimai time tracking system.
 ## Features
 
 - **Smart Start/Stop Toggle**: Single button that starts and stops time tracking
-  - Shows pause icon with elapsed time when active
+  - Shows stop icon with elapsed time when active
   - Automatically stops other active time tracking when starting a new session
   - Only displays running state on the button matching the active project/activity
 - **Active Tracking Display**: Dedicated display button showing current tracking status
@@ -52,7 +52,7 @@ Each Start Time Tracking button now functions as a **smart toggle button**:
 **Behavior:**
 - **First Press**: Starts time tracking for the configured project/activity
   - Automatically stops any other active time tracking
-  - Shows pause icon (⏸️) to indicate tracking is active
+  - Shows stop icon to indicate tracking is active
   - Displays elapsed time (HH:MM format) in the top line
 - **Second Press**: Stops the active time tracking
   - Returns to normal start icon
@@ -70,7 +70,7 @@ Use the "Refresh Data" button to update all dropdown lists if new customers, pro
 
 #### Stop Time Tracking Action (Legacy)
 
-The dedicated Stop Time Tracking action is still available for users who prefer separate start/stop buttons, but the new toggle functionality makes it largely unnecessary.
+The dedicated Stop Time Tracking action is there to stop entries when i.e. not started via the stream deck.
 
 #### Display Active Tracking Action
 
@@ -107,12 +107,12 @@ A dedicated display button that shows information about the currently active tim
    - Select activity from dropdown (auto-selected if only one available)
    - Add optional description
 3. **Use the buttons**: 
-   - **First press**: Starts time tracking (shows pause icon with elapsed time in top line)
+   - **First press**: Starts time tracking (shows stop icon with elapsed time in top line)
    - **Second press**: Stops time tracking (returns to start icon)
    - **Switch projects**: Press any other configured button to automatically stop current tracking and start the new one
 
 **Visual Feedback:**
-- ⏸️ Pause icon indicates active time tracking
+- ⏸️ stop icon indicates active time tracking
 - HH:MM elapsed time display in top line
 - Only the button with matching project/activity shows running state
 - Brief green/red backgrounds indicate success/error

@@ -27,6 +27,12 @@ class DisplayActiveTracking(ActionBase):
         self.is_updating = False
         
     def on_ready(self) -> None:
+        # Reset state variables to handle page caching
+        # This ensures proper state when navigating back to cached pages  
+        self.current_timesheet = None
+        self.is_updating = False
+        # Note: Don't reset update_timer_id as it's managed by timer lifecycle
+        
         # Set the default icon for display tracking
         self.set_media(media_path=self.plugin_base.get_asset_path("info.png"), size=0.75)
         

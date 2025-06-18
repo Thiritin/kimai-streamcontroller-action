@@ -33,6 +33,13 @@ class StartTracking(ActionBase):
         self.start_time = None
         
     def on_ready(self) -> None:
+        # Reset state variables to handle page caching
+        # This ensures proper state when navigating back to cached pages
+        self.is_running = False
+        self.current_timesheet_id = None
+        self.start_time = None
+        # Note: Don't reset elapsed_timer_id as it's managed by timer lifecycle
+        
         # Set the default icon for start tracking
         self.set_media(media_path=self.plugin_base.get_asset_path("start.png"), size=0.75)
         
