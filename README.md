@@ -68,7 +68,7 @@ Each Start Time Tracking button now functions as a **smart toggle button**:
 
 Use the "Refresh Data" button to update all dropdown lists if new customers, projects, or activities are added to Kimai.
 
-#### Stop Time Tracking Action (Legacy)
+#### Stop Time Tracking Action
 
 The dedicated Stop Time Tracking action is there to stop entries when i.e. not started via the stream deck.
 
@@ -112,7 +112,7 @@ A dedicated display button that shows information about the currently active tim
    - **Switch projects**: Press any other configured button to automatically stop current tracking and start the new one
 
 **Visual Feedback:**
-- ⏸️ stop icon indicates active time tracking
+- Stop icon indicates active time tracking
 - HH:MM elapsed time display in top line
 - Only the button with matching project/activity shows running state
 - Brief green/red backgrounds indicate success/error
@@ -130,16 +130,6 @@ If you need to refresh the lists:
 1. Click the **"Refresh Data"** button in the action configuration
 2. All dropdowns will be updated with the latest data from Kimai
 
-**Manual lookup** (if needed):
-- **Customers**: Go to Customers in Kimai, the ID is shown in the URL or customer list
-- **Projects**: Go to Projects in Kimai, the ID is shown in the URL or project list
-- **Activities**: Go to Activities in Kimai, the ID is shown in the URL or activity list  
-
-**API endpoints** for advanced users:
-- `/api/customers` - List all customers
-- `/api/projects` - List all projects (can be filtered with `?customer=ID`)
-- `/api/activities` - List all activities (can be filtered with `?project=ID` or `?globals=true`)
-
 ## Requirements
 
 - Kimai installation with API access
@@ -149,7 +139,7 @@ If you need to refresh the lists:
 ## Important Notes
 
 ### Datetime Format
-The plugin uses the correct HTML5 "local date and time" format (`YYYY-MM-DDTHH:mm:ss`) when creating timesheets, as required by the Kimai API. This ensures that time tracking entries are created with the correct timestamps in your local timezone.
+The plugin uses the correct HTML5 "local date and time" format (`YYYY-MM-DDTHH:mm:ss`) when creating timesheets, as required by the Kimai API. This means that your computers timezone should match your kimai user profile timezone!
 
 ### API Compatibility
 This plugin is designed to work with Kimai's REST API and follows the official API documentation for timesheet creation and management.
