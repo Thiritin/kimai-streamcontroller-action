@@ -39,10 +39,25 @@ jobs:
             with open('manifest.json', 'r') as f:
                 manifest = json.load(f)
             
-            required_fields = ['id', 'name', 'version', 'author', 'description']
+            required_fields = ['id', 'name', 'version', 'descriptions']
             for field in required_fields:
                 if field not in manifest:
                     print(f'❌ Missing required field: {field}')
+                    sys.exit(1)
+            
+            # Check descriptions structure
+            if 'descriptions' in manifest:
+                if not isinstance(manifest['descriptions'], dict):
+                    print('❌ descriptions must be an object')
+                    sys.exit(1)
+                if 'en' not in manifest['descriptions']:
+                    print('❌ descriptions must contain at least English (en)')
+                    sys.exit(1)
+            
+            # Check minimum-app-version if present
+            if 'minimum-app-version' in manifest:
+                if not isinstance(manifest['minimum-app-version'], str):
+                    print('❌ minimum-app-version must be a string')
                     sys.exit(1)
                     
             print('✅ manifest.json is valid')
@@ -131,6 +146,11 @@ jobs:
                 print(f'❌ Missing asset: assets/{asset}')
                 sys.exit(1)
                 
+        # Check thumbnail
+        if not os.path.exists('thumbnail.png'):
+            print('❌ Missing thumbnail.png')
+            sys.exit(1)
+                
         print('✅ All required assets present')
         "
 
@@ -200,7 +220,7 @@ jobs:
         echo "🎉 Kimai StreamController Plugin Build Successful!"
         echo "📦 Plugin: $(jq -r '.name' manifest.json)"
         echo "🏷️  Version: $(jq -r '.version' manifest.json)"
-        echo "👤 Author: $(jq -r '.author' manifest.json)"
-        echo "📄 Description: $(jq -r '.description' manifest.json)"
+        echo "� Description: $(jq -r '.descriptions.en' manifest.json)"
+        echo "🏷️  Tags: $(jq -r '.tags | join(", ")' manifest.json)"
         echo ""
         echo "✅ Ready for StreamController Plugin Store!"
