@@ -147,8 +147,8 @@ jobs:
                 sys.exit(1)
                 
         # Check thumbnail
-        if not os.path.exists('thumbnail.png'):
-            print('❌ Missing thumbnail.png')
+        if not os.path.exists('assets/thumbnail.png'):
+            print('❌ Missing assets/thumbnail.png')
             sys.exit(1)
                 
         print('✅ All required assets present')
