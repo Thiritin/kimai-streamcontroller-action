@@ -50,8 +50,8 @@ jobs:
                 if not isinstance(manifest['descriptions'], dict):
                     print('❌ descriptions must be an object')
                     sys.exit(1)
-                if 'en' not in manifest['descriptions']:
-                    print('❌ descriptions must contain at least English (en)')
+                if 'en_US' not in manifest['descriptions']:
+                    print('❌ descriptions must contain at least English (en_US)')
                     sys.exit(1)
             
             # Check minimum-app-version if present
