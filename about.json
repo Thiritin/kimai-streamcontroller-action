@@ -1,11 +1,6 @@
 {
   "author": "Thiritin",
-  "release-notes": {
-    "path": "changelog",
-    "version": "1.0.0"
-  },
   "credits": {
-    "Code By": ["Thiritin https://github.com/Thiritin"],
-    "Contributors": []
+    "Code By": ["Thiritin https://github.com/Thiritin"]
   }
 }
